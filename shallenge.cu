@@ -82,7 +82,6 @@ std::string nounce_to_string(int64_t nounce)
     return std::string(buffer);
 }
 
-
 constexpr int grid_size = 48;
 constexpr int block_size = 1024;
 constexpr int64_t num_threads_per_launch = grid_size * block_size;
@@ -144,15 +143,15 @@ int main(int argc, char *argv[0])
     sha256_hash program_best_hash;
     memset(reinterpret_cast<void *>(program_best_hash.hash), 0xff, 32); // Initialize with high values
 
-    for (int64_t iter = cmd_seed; iter < cmd_seed + cmd_iter; iter++)
+    for (int64_t iter = 0; iter < cmd_iter; iter++)
     {
-        int64_t nounce_offset = (int64_t)iter * ((int64_t)num_threads_per_launch * (int64_t)iter_per_thread);
-        CUDA_CHECK(cudaMemcpy(d_run_offset, &nounce_offset, 1 * sizeof(int64_t), cudaMemcpyHostToDevice));
+        int64_t nounce_offset = cmd_seed + (int64_t)iter * ((int64_t)num_threads_per_launch * (int64_t)iter_per_thread);
+        CUDA_CHECK(cudaMemcpy(reinterpret_cast<void *>(d_run_offset), reinterpret_cast<void *>(&nounce_offset), 1 * sizeof(int64_t), cudaMemcpyHostToDevice));
         CUDA_CHECK(cudaEventRecord(start, 0));
         find_lowest_sha256<iter_per_thread, 10><<<grid_size, block_size>>>(d_run_offset, d_best_nonce, d_best_hash);
         CUDA_CHECK(cudaEventRecord(stop, 0));
-        CUDA_CHECK(cudaMemcpy(h_best_nonce, d_best_nonce, num_threads_per_launch * sizeof(int64_t), cudaMemcpyDeviceToHost));
-        CUDA_CHECK(cudaMemcpy(h_best_hash, d_best_hash, num_threads_per_launch * sizeof(sha256_hash), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(reinterpret_cast<void *>(h_best_nonce), reinterpret_cast<void *>(d_best_nonce), num_threads_per_launch * sizeof(int64_t), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(reinterpret_cast<void *>(h_best_hash), reinterpret_cast<void *>(d_best_hash), num_threads_per_launch * sizeof(sha256_hash), cudaMemcpyDeviceToHost));
 
         sha256_hash iter_best_hash;
         memset(reinterpret_cast<void *>(iter_best_hash.hash), 0xff, 32); // Initialize with high values
@@ -177,7 +176,7 @@ int main(int argc, char *argv[0])
             std::cout << "Best hash: " << iter_best_hash << std::endl;
             program_best_hash = iter_best_hash;
         }
-        std::cout << "Iteration " << iter - cmd_seed + 1 << " of " << cmd_iter << " completed. " << std::endl;
+        std::cout << "Iteration " << iter + 1 << " of " << cmd_iter << " completed. " << std::endl;
         std::cout << "Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - sys_start).count() / 1000.0 << " s" << std::endl;
     }
     CUDA_CHECK(cudaFree(d_best_nonce));
