@@ -3,10 +3,13 @@
 
 Code for https://shallenge.quirino.net/ https://news.ycombinator.com/item?id=40683564
 
-To build, run `make`.
+To build, run `make`. To do so in a docker container, run:
+```bash
+docker run --rm -w /workspace -v .:/workspace --user $(id -u):$(id -g) nvidia/cuda:12.5.0-devel-ubuntu22.04 make
+```
 
 To run:
-```
+```bash
 $ ./build/shallenge --seed=1337 --hashes=0.1 --block_size=1024 --grid_size=48
 Number of devices: 1
 Device 0: NVIDIA GeForce RTX 3070 Ti
@@ -37,8 +40,11 @@ Elapsed time: 20.52 s
 
 ```
 A lot of stuff is hardcoded right now, including my username.
-
-To profile, compile the program with --lineinfo by running 
+Can also do it in docker: 
+```bash
+docker run --gpus all --rm -w /workspace -v ./build:/workspace --user $(id -u):$(id -g) nvidia/cuda:12.5.0-runtime-ubuntu22.04 /workspace/shallenge --seed 10 --hashes 0.1
 ```
+To profile, compile the program with --lineinfo by running 
+```bash
 make PROFILE=1 ncu
 ```
