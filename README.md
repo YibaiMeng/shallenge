@@ -44,6 +44,15 @@ Can also do it in docker:
 ```bash
 docker run --gpus all --rm -w /workspace -v ./build:/workspace --user $(id -u):$(id -g) nvidia/cuda:12.4.0-runtime-ubuntu22.04 /workspace/shallenge --seed 10 --hashes 0.1
 ```
+
+The code can be run remotely with multiple GPUs using modal.com:
+```
+python3 -m venv ./env
+./env/bin/pip install modal
+./env/bin/modal run --detach model_remote.py
+```
+
+
 To profile, compile the program with --lineinfo by running 
 ```bash
 make PROFILE=1 ncu
