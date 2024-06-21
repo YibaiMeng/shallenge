@@ -1,14 +1,15 @@
-#include <cuda_runtime.h>
-#include <device_launch_parameters.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <chrono>
-
 #include <iostream>
 #include <iomanip>
-#include "sha256.cuh"
+
+#include <cuda_runtime.h>
+#include <device_launch_parameters.h>
+#include "third_party/argparse/include/argparse/argparse.hpp"
+
 #include "cuda_error.cuh"
 #include "sha256.cuh"
 #include "sha256_hash.h"
@@ -89,20 +90,31 @@ constexpr int64_t iter_per_thread = 1048576;
 
 int main(int argc, char *argv[0])
 {
-    int64_t cmd_seed = 0;
-    int64_t cmd_iter = 0;
+    argparse::ArgumentParser program("shallenge");
 
-    for (int i = 1; i < argc; ++i)
+    program.add_argument("--seed")
+        .help("set seed value")
+        .required()
+        .scan<'i', int64_t>();
+
+    program.add_argument("--iter")
+        .help("set iteration value")
+        .required()
+        .scan<'i', int64_t>();
+
+    try
     {
-        if (std::string(argv[i]) == "--seed" && i + 1 < argc)
-        {
-            cmd_seed = std::stoll(argv[++i]);
-        }
-        else if (std::string(argv[i]) == "--iter" && i + 1 < argc)
-        {
-            cmd_iter = std::stoll(argv[++i]);
-        }
+        program.parse_args(argc, argv);
     }
+    catch (const std::exception &e)
+    {
+        std::cerr << e.what() << std::endl;
+        std::cerr << program;
+        std::exit(1);
+    }
+
+    int64_t cmd_seed = program.get<int64_t>("--seed");
+    int64_t cmd_iter = program.get<int64_t>("--iter");
 
     std::cout << "Starting seed: " << cmd_seed << std::endl;
     std::cout << "Iterations: " << cmd_iter << std::endl;
