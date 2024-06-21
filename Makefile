@@ -1,4 +1,8 @@
-ARCHS=-arch=sm_86
+ARCHS=-gencode=arch=compute_80,code=sm_80 \
+-gencode=arch=compute_80,code=compute_80 \
+-gencode=arch=compute_86,code=sm_86 \
+-gencode=arch=compute_86,code=compute_86
+
 NVCC_FLAGS=-O3 $(ARCHS)
 NVCC_PROFILE_FLAGS=-O3 $(ARCHS) -lineinfo
 BUILD_DIR=build
