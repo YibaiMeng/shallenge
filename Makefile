@@ -1,21 +1,20 @@
-ARCHS=-arch=compute_86 -code=sm_86
+ARCHS=-arch=sm_86
 NVCC_FLAGS=-O3 $(ARCHS)
 NVCC_PROFILE_FLAGS=-O3 $(ARCHS) -lineinfo
 BUILD_DIR=build
-
+ROOT_DIR := $(shell pwd)
 PROFILE=0
 ifeq ($(PROFILE), 1)
 NVCC_FLAGS=$(NVCC_PROFILE_FLAGS)
 BUILD_DIR=profile
 endif
 
-SRCS=shallenge.cu
-HEADERS=$(wildcard *.cuh) $(wildcard *.h)
+SRCS=$(wildcard src/*.cu) $(wildcard src/*.cpp)
+HEADERS=$(wildcard include/*.cuh) $(wildcard include/*.h)
 
-INCLUDE_DIRS=-Ithird_party/argparse/include
+INCLUDE_DIRS=-I$(ROOT_DIR)/include -I$(ROOT_DIR)/third_party/argparse/include
 
-
-OBJS=$(SRCS:%.cu=$(BUILD_DIR)/%.o)
+OBJS=$(SRCS:src/%.cu=$(BUILD_DIR)/%.o)
 
 $(BUILD_DIR)/shallenge: $(BUILD_DIR) $(OBJS)
 	nvcc $(NVCC_FLAGS) -o $(BUILD_DIR)/shallenge -O3 $(OBJS) $(INCLUDE_DIRS)

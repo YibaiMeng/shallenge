@@ -6,11 +6,11 @@
 #include <iostream>
 #include <iomanip>
 
+#include <argparse/argparse.hpp>
 #include <cuda_runtime.h>
 #include <curand.h>
 #include <curand_kernel.h>
 #include <device_launch_parameters.h>
-#include "third_party/argparse/include/argparse/argparse.hpp"
 
 #include "cuda_device_property.cuh"
 #include "cuda_error.cuh"
