@@ -151,10 +151,10 @@ int main(int argc, char *argv[0])
     print_cuda_device_property();
     print_kernel_attributes(find_lowest_sha256<username_len>);
 
-    std::cout << "Seed: " << cmd_seed << std::endl;
-    std::cout << std::fixed << std::setprecision(3) << "Hashes in total: " << cmd_hash << " TH" << std::endl;
-    std::cout << "Grid size " << grid_size << ", Block size: " << block_size << ", Threads: " << num_threads_per_launch << std::endl;
-    std::cout << "Kernel launches: " << cmd_iter << std::endl;
+    std::cerr << "Seed: " << cmd_seed << std::endl;
+    std::cerr << std::fixed << std::setprecision(3) << "Hashes in total: " << cmd_hash << " TH" << std::endl;
+    std::cerr << "Grid size " << grid_size << ", Block size: " << block_size << ", Threads: " << num_threads_per_launch << std::endl;
+    std::cerr << "Kernel launches: " << cmd_iter << std::endl;
     if (program.get<bool>("--dry-run"))
     {
         exit(0);
@@ -206,15 +206,15 @@ int main(int argc, char *argv[0])
         float elapsedTime;
         CUDA_CHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
 
-        std::cout << std::fixed << std::setprecision(2) << "Hash rate: " << (double)(num_threads_per_launch * iter_per_kernel) / (double)elapsedTime / 1e6 << " GH / s" << std::endl;
+        std::cerr << std::fixed << std::setprecision(2) << "Hash rate: " << (double)(num_threads_per_launch * iter_per_kernel) / (double)elapsedTime / 1e6 << " GH / s" << std::endl;
         if (is_smaller(&iter_best_hash, &program_best_hash))
         {
-            std::cout << "Best nonce: " << nounce_to_string(iter_best_nounce) << std::endl;
-            std::cout << "Best hash: " << iter_best_hash << std::endl;
+            std::cerr << "Best nonce: " << nounce_to_string(iter_best_nounce) << std::endl;
+            std::cerr << "Best hash: " << iter_best_hash << std::endl;
             program_best_hash = iter_best_hash;
         }
-        std::cout << "Iteration " << iter + 1 << " of " << cmd_iter << " completed. " << std::endl;
-        std::cout << "Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - sys_start).count() / 1000.0 << " s" << std::endl;
+        std::cerr << "Iteration " << iter + 1 << " of " << cmd_iter << " completed. " << std::endl;
+        std::cerr << "Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - sys_start).count() / 1000.0 << " s" << std::endl;
     }
     CUDA_CHECK(cudaFree(d_best_nonce));
     CUDA_CHECK(cudaFree(d_best_hash));
