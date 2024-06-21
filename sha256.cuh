@@ -4,10 +4,9 @@
 #include <stdint.h>
 
 #include <cuda_runtime.h>
-struct sha256_hash
-{
-    uint32_t hash[8];
-};
+
+#include "sha256_hash.h"
+
 
 // SHA-256 constants
 __device__ __constant__ uint32_t k[64] = {

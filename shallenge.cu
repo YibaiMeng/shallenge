@@ -10,6 +10,8 @@
 #include <iomanip>
 #include "sha256.cuh"
 #include "cuda_error.cuh"
+#include "sha256.cuh"
+#include "sha256_hash.h"
 
 __device__ __host__ bool is_smaller(sha256_hash *a, sha256_hash *b)
 {
@@ -79,12 +81,6 @@ std::string nounce_to_string(int64_t nounce)
     return std::string(buffer);
 }
 
-std::string print_hash(const sha256_hash &hash)
-{
-    char buffer[100];
-    snprintf(buffer, sizeof(buffer), "%08x %08x %08x %08x %08x %08x %08x %08x", hash.hash[0], hash.hash[1], hash.hash[2], hash.hash[3], hash.hash[4], hash.hash[5], hash.hash[6], hash.hash[7]);
-    return std::string(buffer);
-}
 
 constexpr int grid_size = 48;
 constexpr int block_size = 1024;
@@ -166,7 +162,7 @@ int main(int argc, char *argv[0])
         if (is_smaller(&iter_best_hash, &program_best_hash))
         {
             std::cout << "Best nonce: " << nounce_to_string(iter_best_nounce) << std::endl;
-            std::cout << "Best hash: " << print_hash(iter_best_hash) << std::endl;
+            std::cout << "Best hash: " << iter_best_hash << std::endl;
             program_best_hash = iter_best_hash;
         }
         std::cout << "Iteration " << iter - cmd_seed + 1 << " of " << cmd_iter << " completed. " << std::endl;
