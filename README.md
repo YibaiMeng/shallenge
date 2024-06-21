@@ -5,7 +5,7 @@ Code for https://shallenge.quirino.net/ https://news.ycombinator.com/item?id=406
 
 To build, run `make`. To do so in a docker container, run:
 ```bash
-docker run --rm -w /workspace -v .:/workspace --user $(id -u):$(id -g) nvidia/cuda:12.5.0-devel-ubuntu22.04 make
+docker run --rm -w /workspace -v .:/workspace --user $(id -u):$(id -g) nvidia/cuda:12.4.0-devel-ubuntu22.04 make
 ```
 
 To run:
@@ -42,7 +42,7 @@ Elapsed time: 20.52 s
 A lot of stuff is hardcoded right now, including my username.
 Can also do it in docker: 
 ```bash
-docker run --gpus all --rm -w /workspace -v ./build:/workspace --user $(id -u):$(id -g) nvidia/cuda:12.5.0-runtime-ubuntu22.04 /workspace/shallenge --seed 10 --hashes 0.1
+docker run --gpus all --rm -w /workspace -v ./build:/workspace --user $(id -u):$(id -g) nvidia/cuda:12.4.0-runtime-ubuntu22.04 /workspace/shallenge --seed 10 --hashes 0.1
 ```
 To profile, compile the program with --lineinfo by running 
 ```bash
