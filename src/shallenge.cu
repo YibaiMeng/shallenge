@@ -18,6 +18,7 @@
 #include "sha256_hash.h"
 
 constexpr int64_t iter_per_kernel = 1048576;
+constexpr int block_size = 1024;
 #define USERNAME "yibaimeng/RTX3070Ti/mengyibai+dot+com/"
 constexpr int username_len = strlen(USERNAME);
 
@@ -43,31 +44,36 @@ __global__ void init_curand_state(uint64_t seed, curandStateXORWOW_t *state)
     curand_init(seed, tid, 0, state + tid);
 }
 
-template <int username_len>
-__global__ void find_lowest_sha256(uint64_t *best_nonce, sha256_hash *best_hash, int32_t iter_per_kernel, curandStateXORWOW_t *curand_state)
+template <int username_len, int threads_per_block = 1024>
+__global__ void find_lowest_sha256(uint64_t *block_best_nonce, sha256_hash *block_best_hash, int32_t iter_per_kernel, curandStateXORWOW_t *curand_state)
 {
+
+    int thread_id = threadIdx.x;
+    int warp_id = thread_id / 32;
+    constexpr int num_warps_per_block = threads_per_block / 32;
+
+    // store warp level reduction
+    __shared__ sha256_hash shared_hashes[num_warps_per_block];
+    __shared__ uint64_t shared_nonces[num_warps_per_block];
+
+    curandState local_curand_state = curand_state[blockDim.x * blockIdx.x + threadIdx.x];
     sha256_hash thread_best_hash;
     memset(reinterpret_cast<void *>(thread_best_hash.hash), 0xff, 32); // Initialize with high values
+    int64_t thread_best_nonce = 0;
+    char buffer[64] = USERNAME;
     static_assert(strlen(USERNAME) == username_len);
     static_assert(username_len + 16 < 62); // That's the most a single sha256 block takes?
-
-    char buffer[64] = USERNAME;
     sha256_hash hash;
-    int32_t t_id = blockDim.x * blockIdx.x + threadIdx.x;
-    int64_t thread_best_nounce = 0;
-
-    curandState local_curand_state = curand_state[t_id];
-
     for (int c = 0; c < iter_per_kernel; c++)
     {
         uint32_t r1 = curand(&local_curand_state);
         uint32_t r2 = curand(&local_curand_state);
-        uint64_t nounce = ((uint64_t)r1 << 32) + (uint64_t)r2;
+        uint64_t nonce = ((uint64_t)r1 << 32) + (uint64_t)r2;
 
 #pragma unroll
         for (int i = 0; i < 64; i += 4)
         {
-            buffer[username_len + i / 4] = ('a' + ((nounce >> i) & 0xf));
+            buffer[username_len + i / 4] = ('a' + ((nonce >> i) & 0xf));
         }
 
         constexpr int len = username_len + 16;
@@ -81,23 +87,60 @@ __global__ void find_lowest_sha256(uint64_t *best_nonce, sha256_hash *best_hash,
         if (is_smaller(&hash, &thread_best_hash))
         {
             thread_best_hash = hash;
-            thread_best_nounce = nounce;
+            thread_best_nonce = nonce;
         }
     }
 
     __syncthreads();
 
-    best_nonce[t_id] = thread_best_nounce;
-    best_hash[t_id] = thread_best_hash;
-    curand_state[t_id] = local_curand_state;
+#pragma unroll
+    for (int offset = 32 / 2; offset > 0; offset /= 2)
+    {
+        sha256_hash other_hash;
+        uint64_t other_nonce = __shfl_down_sync(0xFFFFFFFF, thread_best_nonce, offset);
+#pragma unroll
+        for (int i = 0; i < 8; ++i)
+        {
+            other_hash.hash[i] = __shfl_down_sync(0xFFFFFFFF, thread_best_hash.hash[i], offset);
+        }
+
+        if (is_smaller(&other_hash, &thread_best_hash))
+        {
+            thread_best_hash = other_hash;
+            thread_best_nonce = other_nonce;
+        }
+    }
+    if (thread_id % 32 == 0)
+    {
+        shared_hashes[warp_id] = thread_best_hash;
+        shared_nonces[warp_id] = thread_best_nonce;
+    }
+    __syncthreads();
+
+    if (thread_id == 0)
+    {
+#pragma unroll
+        for (int i = 0; i < num_warps_per_block; i++)
+        {
+            if (is_smaller(&shared_hashes[i], &thread_best_hash))
+            {
+                thread_best_nonce = shared_nonces[i];
+                thread_best_hash = shared_hashes[i];
+            }
+        }
+        block_best_nonce[blockIdx.x] = thread_best_nonce;
+        block_best_hash[blockIdx.x] = thread_best_hash;
+    }
+
+    curand_state[blockDim.x * blockIdx.x + threadIdx.x] = local_curand_state;
 }
 
-std::string nounce_to_string(uint64_t nounce)
+std::string nonce_to_string(uint64_t nonce)
 {
     char buffer[20];
     for (int i = 0; i < 64; i += 4)
     {
-        buffer[i / 4] = ('a' + (int)((uint64_t)(nounce >> i) & 0xf));
+        buffer[i / 4] = ('a' + (int)((uint64_t)(nonce >> i) & 0xf));
     }
     buffer[16] = 0;
     return std::string(buffer);
@@ -125,10 +168,6 @@ int main(int argc, char *argv[0])
         .help("grid size for the kernel launch")
         .default_value(48)
         .scan<'i', int>();
-    program.add_argument("--block_size")
-        .help("block size for the kernel launch")
-        .default_value(1024)
-        .scan<'i', int>();
     program.add_argument("--dry-run")
         .help("don't run, only show device property and run configurations")
         .default_value(false)
@@ -149,13 +188,12 @@ int main(int argc, char *argv[0])
     int64_t cmd_seed = program.get<int64_t>("--seed");
     double cmd_hash = program.get<double>("--hashes");
     int grid_size = program.get<int>("--grid_size");
-    int block_size = program.get<int>("--block_size");
     int64_t num_threads_per_launch = grid_size * block_size;
-    double hashes_per_kernel = cmd_hash * 1e12 / static_cast<double>(num_threads_per_launch);
-    int64_t cmd_iter = static_cast<int64_t>(std::ceil(hashes_per_kernel * num_gpus / iter_per_kernel));
+    double hashes_per_kernel = cmd_hash * 1e12 / (static_cast<double>(num_threads_per_launch) * num_gpus);
+    int64_t cmd_iter = static_cast<int64_t>(std::ceil(hashes_per_kernel / iter_per_kernel));
 
     print_cuda_device_property();
-    print_kernel_attributes(find_lowest_sha256<username_len>);
+    print_kernel_attributes(find_lowest_sha256<username_len, block_size>);
     int device_count = 0;
     CUDA_CHECK(cudaGetDeviceCount(&device_count));
     if (device_count > num_gpus)
@@ -177,11 +215,11 @@ int main(int argc, char *argv[0])
 
     std::vector<cudaEvent_t> start_events(num_gpus), stop_events(num_gpus);
     std::vector<cudaStream_t> streams(num_gpus);
-    std::vector<uint64_t *> d_best_nonce(num_gpus);
-    std::vector<sha256_hash *> d_best_hash(num_gpus);
+    std::vector<uint64_t *> d_block_best_nonce(num_gpus);
+    std::vector<sha256_hash *> d_block_best_hash(num_gpus);
     std::vector<curandStateXORWOW_t *> curand_state(num_gpus);
-    std::vector<uint64_t *> h_best_nonce(num_gpus);
-    std::vector<sha256_hash *> h_best_hash(num_gpus);
+    std::vector<uint64_t *> h_block_best_nonce(num_gpus);
+    std::vector<sha256_hash *> h_block_best_hash(num_gpus);
 
     for (int gpu_id = 0; gpu_id < num_gpus; ++gpu_id)
     {
@@ -192,11 +230,11 @@ int main(int argc, char *argv[0])
         CUDA_CHECK(cudaEventCreate(&start));
         CUDA_CHECK(cudaEventCreate(&stop));
 
-        CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&d_best_nonce[gpu_id]), num_threads_per_launch * sizeof(uint64_t)));
-        CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&d_best_hash[gpu_id]), num_threads_per_launch * sizeof(sha256_hash)));
+        CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&d_block_best_nonce[gpu_id]), grid_size * sizeof(uint64_t)));
+        CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&d_block_best_hash[gpu_id]), grid_size * sizeof(sha256_hash)));
         CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&curand_state[gpu_id]), num_threads_per_launch * sizeof(curandStateXORWOW_t)));
-        h_best_nonce[gpu_id] = new uint64_t[num_threads_per_launch];
-        h_best_hash[gpu_id] = new sha256_hash[num_threads_per_launch];
+        h_block_best_nonce[gpu_id] = new uint64_t[grid_size];
+        h_block_best_hash[gpu_id] = new sha256_hash[grid_size];
 
         init_curand_state<<<grid_size, block_size, 0, streams[gpu_id]>>>(cmd_seed + gpu_id, curand_state[gpu_id]);
     }
@@ -210,20 +248,20 @@ int main(int argc, char *argv[0])
         {
             CUDA_CHECK(cudaSetDevice(gpu_id));
             CUDA_CHECK(cudaEventRecord(start_events[gpu_id], streams[gpu_id]));
-            find_lowest_sha256<username_len><<<grid_size, block_size, 0, streams[gpu_id]>>>(d_best_nonce[gpu_id], d_best_hash[gpu_id], iter_per_kernel, curand_state[gpu_id]);
+            find_lowest_sha256<username_len, block_size><<<grid_size, block_size, 0, streams[gpu_id]>>>(d_block_best_nonce[gpu_id], d_block_best_hash[gpu_id], iter_per_kernel, curand_state[gpu_id]);
             CUDA_CHECK(cudaEventRecord(stop_events[gpu_id], streams[gpu_id]));
         }
 
         for (int gpu_id = 0; gpu_id < num_gpus; ++gpu_id)
         {
             CUDA_CHECK(cudaSetDevice(gpu_id));
-            CUDA_CHECK(cudaMemcpyAsync(reinterpret_cast<void *>(h_best_nonce[gpu_id]), reinterpret_cast<void *>(d_best_nonce[gpu_id]), num_threads_per_launch * sizeof(uint64_t), cudaMemcpyDeviceToHost, streams[gpu_id]));
-            CUDA_CHECK(cudaMemcpyAsync(reinterpret_cast<void *>(h_best_hash[gpu_id]), reinterpret_cast<void *>(d_best_hash[gpu_id]), num_threads_per_launch * sizeof(sha256_hash), cudaMemcpyDeviceToHost, streams[gpu_id]));
+            CUDA_CHECK(cudaMemcpyAsync(reinterpret_cast<void *>(h_block_best_nonce[gpu_id]), reinterpret_cast<void *>(d_block_best_nonce[gpu_id]), grid_size * sizeof(uint64_t), cudaMemcpyDeviceToHost, streams[gpu_id]));
+            CUDA_CHECK(cudaMemcpyAsync(reinterpret_cast<void *>(h_block_best_hash[gpu_id]), reinterpret_cast<void *>(d_block_best_hash[gpu_id]), grid_size * sizeof(sha256_hash), cudaMemcpyDeviceToHost, streams[gpu_id]));
         }
 
         sha256_hash iter_best_hash;
         memset(reinterpret_cast<void *>(iter_best_hash.hash), 0xff, 32); // Initialize with high values
-        uint64_t iter_best_nounce = 0;
+        uint64_t iter_best_nonce = 0;
         float total_elasped_time = 0;
         for (int gpu_id = 0; gpu_id < num_gpus; ++gpu_id)
         {
@@ -234,12 +272,12 @@ int main(int argc, char *argv[0])
             CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start_events[gpu_id], stop_events[gpu_id]));
             std::cerr << "GPU " << gpu_id << " spent " << elapsed_time << " ms this iteration" << std::endl;
             total_elasped_time += elapsed_time;
-            for (int i = 0; i < num_threads_per_launch; i++)
+            for (int i = 0; i < grid_size; i++)
             {
-                if (is_smaller(h_best_hash[gpu_id] + i, &iter_best_hash))
+                if (is_smaller(h_block_best_hash[gpu_id] + i, &iter_best_hash))
                 {
-                    iter_best_hash = h_best_hash[gpu_id][i];
-                    iter_best_nounce = h_best_nonce[gpu_id][i];
+                    iter_best_hash = h_block_best_hash[gpu_id][i];
+                    iter_best_nonce = h_block_best_nonce[gpu_id][i];
                 }
             }
         }
@@ -247,7 +285,7 @@ int main(int argc, char *argv[0])
         std::cerr << std::fixed << std::setprecision(2) << "Hash rate per GPU: " << (double)(num_threads_per_launch * iter_per_kernel * num_gpus) / (double)total_elasped_time / 1e6 << " GH / s" << std::endl;
         if (is_smaller(&iter_best_hash, &program_best_hash))
         {
-            std::cerr << "Best nonce: " << nounce_to_string(iter_best_nounce) << std::endl;
+            std::cerr << "Best nonce: " << nonce_to_string(iter_best_nonce) << std::endl;
             std::cerr << "Best hash: " << iter_best_hash << std::endl;
             program_best_hash = iter_best_hash;
         }
@@ -258,10 +296,10 @@ int main(int argc, char *argv[0])
     for (int gpu_id = 0; gpu_id < num_gpus; ++gpu_id)
     {
         CUDA_CHECK(cudaSetDevice(gpu_id));
-        CUDA_CHECK(cudaFree(d_best_nonce[gpu_id]));
-        CUDA_CHECK(cudaFree(d_best_hash[gpu_id]));
-        delete[] h_best_hash[gpu_id];
-        delete[] h_best_nonce[gpu_id];
+        CUDA_CHECK(cudaFree(d_block_best_nonce[gpu_id]));
+        CUDA_CHECK(cudaFree(d_block_best_hash[gpu_id]));
+        delete[] h_block_best_hash[gpu_id];
+        delete[] h_block_best_nonce[gpu_id];
         CUDA_CHECK(cudaStreamDestroy(streams[gpu_id]));
     }
 
