@@ -270,7 +270,6 @@ int main(int argc, char *argv[0])
             CUDA_CHECK(cudaEventSynchronize(stop_events[gpu_id]));
             float elapsed_time;
             CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start_events[gpu_id], stop_events[gpu_id]));
-            std::cerr << "GPU " << gpu_id << " spent " << elapsed_time << " ms this iteration" << std::endl;
             total_elasped_time += elapsed_time;
             for (int i = 0; i < grid_size; i++)
             {

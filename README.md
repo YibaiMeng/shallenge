@@ -67,6 +67,24 @@ A table of hash rates. Grid size set to 2x the number of SMs for each arch.
 | RTX 4090 | 18.4             |
 | H100     | 14.3             |
 
+Calculations on number of hashes needed to have a 50% probability of getting a hash with N or more zeros in its prefix.
+
+$$
+p = (1 - \frac{1}{2 ^ N})^ H
+$$
+
+Consider 
+$$ \ln (1 - x)\approx  -x $$
+when $x$ is small, we get
+
+$$
+H = - 2 ^ N \ln p
+$$
+
+The top entry on the leader board has 56 leading zeros in its hash. So we need to run $4.9 * 10^{16}$ hashes to have a 50% probability of getting a hash with as many or more zeros. For my setup with 8 + 9 = 17 RTX 4090s, each with a hash rate of 14 GH /s, or a total hash rate of 240 GH / s, it'll take 57 hours to have a 50% chance of getting number one place on the leader board. The 4090s cost me $3.3 per hour in total, running 57 hour costs $188.
+
+
+
 
 
 
