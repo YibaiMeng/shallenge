@@ -57,3 +57,19 @@ To profile, compile the program with --lineinfo by running
 ```bash
 make PROFILE=1 ncu
 ```
+
+A table of hash rates. Grid size set to 2x the number of SMs for each arch.
+
+| GPU      | Hash Rate (GH/s) |
+| -------- | ---------------- |
+| RTX 3070 | 4.9              |
+| RTX 3090 | 6.7              |
+| RTX 4090 | 18.4             |
+| H100     | 14.3             |
+
+
+
+
+
+
+
