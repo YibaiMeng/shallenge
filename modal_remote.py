@@ -41,8 +41,6 @@ def run_shallenge(config: dict):
         str(hashes),
         "--grid_size",
         str(grid_size),
-        "--block_size",
-        str(block_size),
     ]
     if dry_run:
         popen_args.append("--dry_run")
@@ -77,7 +75,6 @@ def main():
                 "seed": seed[i],
                 "hashes": 150,
                 "grid_size": 288,
-                "block_size": 1024,
                 "dry_run": False,
             }
             for i in range(num_instances)

@@ -3,6 +3,13 @@
 
 Code for https://shallenge.quirino.net/ https://news.ycombinator.com/item?id=40683564
 
+My best result:
+
+- String: `yibaimeng/RTX3070Ti/mengyibai+dot+com/doifomejimmmkoke`
+- Hash: `00000000 00000974 7ff9830f 0f87f57f f79c2b41 0b323a95 b4c0bc97 aecf4ebb`
+
+To confirm, ```echo -n "yibaimeng/RTX3070Ti/mengyibai+dot+com/doifomejimmmkoke" | sha256sum``` 
+
 To build, run `make`. To do so in a docker container, run:
 ```bash
 docker run --rm -w /workspace -v .:/workspace --user $(id -u):$(id -g) nvidia/cuda:12.4.0-devel-ubuntu22.04 make
@@ -10,34 +17,30 @@ docker run --rm -w /workspace -v .:/workspace --user $(id -u):$(id -g) nvidia/cu
 
 To run:
 ```bash
-$ ./build/shallenge --seed=1337 --hashes=0.1 --block_size=1024 --grid_size=48
+$ ./build/shallenge --seed 1337 --grid_size 48 --hashes=0.1
 Number of devices: 1
 Device 0: NVIDIA GeForce RTX 3070 Ti
   Compute capability: 8.6
   Total global memory: 8589410304 bytes
   Shared memory per block: 49152 bytes
-  Registers per block: 65536
-  Warp size: 32
+  Registers per block: 65536                                                                                                                                                                                                                  Warp size: 32
   Max threads per block: 1024
   Max threads per multiprocessor: 1536
   Number of multiprocessors: 48
 Register usage: 56
-Shared memory per block: 0 bytes
+Shared memory per block: 1280 bytes
 Occupancy: 24576 threads per multiprocessor
-Seed: 1337
-Hashes in total: 0.100 TH
+Seed: 1337                                                                                                                                                                                                                                  Hashes in total: 0.100 TH
 Grid size 48, Block size: 1024, Threads: 49152
 Kernel launches: 2
-Hash rate: 5.05 GH / s
+Hash rate per GPU: 4.99 GH / s
 Best nonce: melifkabmnmnjjda
 Best hash: 00000000 01a5ba71 c1fb13a2 02d8ad30 0784d9b7 ded85f69 02f5fd4f c70c53c6
 Iteration 1 of 2 completed.
-Elapsed time: 10.20 s
-Hash rate: 5.00 GH / s
+Elapsed time: 10.33 s
+Hash rate per GPU: 4.92 GH / s
 Iteration 2 of 2 completed.
-Elapsed time: 20.52 s
-....
-
+Elapsed time: 20.80 s
 ```
 A lot of stuff is hardcoded right now, including my username.
 Can also do it in docker: 
@@ -46,10 +49,10 @@ docker run --gpus all --rm -w /workspace -v ./build:/workspace --user $(id -u):$
 ```
 
 The code can be run remotely with multiple GPUs using modal.com:
-```
+```bash
 python3 -m venv ./env
 ./env/bin/pip install modal
-./env/bin/modal run --detach model_remote.py
+./env/bin/modal run --detach modal_remote.py
 ```
 
 
@@ -63,7 +66,9 @@ A table of hash rates. Grid size set to 2x the number of SMs for each arch.
 | GPU      | Hash Rate (GH/s) |
 | -------- | ---------------- |
 | RTX 3070 | 4.9              |
+| A10G     | 5.6              |
 | RTX 3090 | 6.7              |
+| A100     | 8.2              |
 | RTX 4090 | 18.4             |
 | H100     | 14.3             |
 
@@ -81,13 +86,9 @@ $$
 H = - 2 ^ N \ln p
 $$
 
-The top entry on the leader board has 56 leading zeros in its hash. So we need to run $4.9 * 10^{16}$ hashes to have a 50% probability of getting a hash with as many or more zeros. For my setup with 8 + 9 = 17 RTX 4090s, each with a hash rate of 14 GH /s, or a total hash rate of 240 GH / s, it'll take 57 hours to have a 50% chance of getting number one place on the leader board. The 4090s cost me $3.3 per hour in total, running 57 hour costs $188.
+The top entry on the leader board has 56 leading zeros in its hash. So we need to run $4.9 * 10^{16}$ hashes to have a 50% probability of getting a hash with as many or more zeros. For my setup with 8 + 9 = 17 RTX 4090s, each with a hash rate of 14 GH /s[^1], or a total hash rate of 240 GH / s, it'll take 57 hours to have a 50% chance of getting number one place on the leader board. The 4090s cost me $3.3 per hour in total, running 57 hour costs $188.
 
-
-
-
-
-
+[^1]: These servers have some power settings that I can't override, and the GPUs are limited to P2 power mode.
 
 
 
